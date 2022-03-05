@@ -11,9 +11,10 @@ def test_gmm_gen():
     nu = 3
     W = np.array([[1, 0], [0, 1]])
 
-    X = gmm_gen(N, D, K, alpha, nu, W, seed=None)
+    X, S = gmm_gen(N, D, K, alpha, nu, W, seed=None)
 
     assert (N, D) == X.shape
+    assert (N, K) == S.shape
 
 
 def test_gibbs_init():
@@ -23,7 +24,7 @@ def test_gibbs_init():
     alpha = [1, 1]
     nu = 3
     W = np.array([[1, 0], [0, 1]])
-    X = gmm_gen(N, D, K, alpha, nu, W)
+    X, _ = gmm_gen(N, D, K, alpha, nu, W)
 
     ss = gibbs_init(X, K)
 
@@ -40,7 +41,7 @@ def test_gibbs_sampling():
     alpha = [1, 1]
     nu = 3
     W = np.array([[1, 0], [0, 1]])
-    X = gmm_gen(N, D, K, alpha, nu, W)
+    X, _ = gmm_gen(N, D, K, alpha, nu, W)
 
     n_iter = 10
     ss = gibbs_sampling(X, K, n_iter)

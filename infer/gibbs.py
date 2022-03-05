@@ -22,14 +22,16 @@ def gmm_gen(N, D, K, alpha, nu, W, seed=None):
     mu = [stats.uniform(scale=3).rvs(D) for _ in range(K)]
 
     X = []
+    S = []
     for n in range(N):
         s_n = np.random.multinomial(1, pvals=pi)
+        S += [s_n]
         for k in range(K):
             if s_n[k] == 1:
                 X += [stats.multivariate_normal(mu[k], Lmd[k]).rvs()]
                 break
 
-    return np.array(X).reshape(N, D)
+    return np.array(X).reshape(N, D), np.array(S).reshape(N, K)
 
 
 def gibbs_init(X, K):
@@ -58,6 +60,9 @@ def gibbs_init(X, K):
                 s_nk in {0, 1} and \sum_k s_nk = 1
     """
     # Initialize
+    N, D = X.shape
+    eps = 1.0e-2
+
     smpl_dict = {}
 
     # Initialize pi
@@ -65,14 +70,19 @@ def gibbs_init(X, K):
 
     # Initialize mu
     mu0 = X.mean(axis=0)
-    smpl_dict["mu"] = [[mu0 for _ in range(K)]]
+    smpl_dict["mu"] = [
+        [
+            mu0.copy() + np.random.multivariate_normal(np.zeros(D), eps * np.eye(D))
+            for _ in range(K)
+        ]
+    ]
 
     # Initialize Lmd
     Lmd0 = np.corrcoef(X.T)
     smpl_dict["Lmd"] = [[Lmd0 for _ in range(K)]]
 
     # Init S: (N, K) matrix
-    S = [stats.bernoulli(smpl_dict["pi"][-1][k]).rvs(len(X)) for k in range(K)]
+    S = [np.random.multinomial(1, pvals=smpl_dict["pi"][-1]) for _ in range(len(X))]
     smpl_dict["S"] = [np.array(S).reshape(len(X), -1)]
 
     return smpl_dict
@@ -97,7 +107,7 @@ def draw_s_n(x_n, mu, Lmd, pi, eps=1.0e-5):
     return np.random.multinomial(1, pvals=eta_n)
 
 
-def draw_Lmd_k_mu_k(X_k, S_k, m, beta, nu, W_inv):
+def draw_Lmd_k_mu_k(X, S_k, m, beta, nu, W_inv):
     """
     Args
         X: (N, D) matrix
@@ -105,20 +115,19 @@ def draw_Lmd_k_mu_k(X_k, S_k, m, beta, nu, W_inv):
     Returns
         Lmd_k: (D, D) matrix
     """
+    X_k = X[S_k == 1]
 
     sum_s_k = S_k.sum()
     beta_hat = sum_s_k + beta
     m_hat_k = (X_k.sum(axis=0) + beta * m) / beta_hat
     nu_hat = sum_s_k + nu
+    sum_xx_n = sum([np.outer(X_k[n], X_k[n]) for n in range(len(X_k))])
 
     W_hat_k_inv = (
-        X_k.T @ X_k
-        + beta * np.outer(m, m)
-        - beta_hat * np.outer(m_hat_k, m_hat_k)
-        + W_inv
+        sum_xx_n + beta * np.outer(m, m) - beta_hat * np.outer(m_hat_k, m_hat_k) + W_inv
     )
 
-    Lmd_k = stats.wishart(nu_hat, W_hat_k_inv).rvs()
+    Lmd_k = stats.wishart(nu_hat, pinv(W_hat_k_inv)).rvs()
     mu_k = stats.multivariate_normal(m_hat_k, pinv(beta_hat * Lmd_k)).rvs()
 
     return Lmd_k, mu_k
@@ -175,9 +184,9 @@ def gibbs_sampling(X, K, n_iter=100):
         mu = []
         for k in range(K):
             Lmd_k, mu_k = draw_Lmd_k_mu_k(
-                X[ss["S"][-1][:, k] == 1],  # X_k
+                X,
                 ss["S"][-1][:, k],  # S_k
-                ss["mu"][0][k],  # m = mu_k
+                ss["mu"][-1][k],  # m = mu_k
                 beta,
                 nu,
                 W_inv,
