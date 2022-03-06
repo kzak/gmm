@@ -1,30 +1,14 @@
 import numpy as np
-from infer.gibbs import gibbs_init, gibbs_sampling, gmm_gen
+from data_gen.gmm_data_gen import load_data
+from infer.gibbs import gibbs_init, gibbs_sampling
 from scipy import stats
-
-
-def test_gmm_gen():
-    N = 10
-    D = 2
-    K = 3
-    alpha = [1, 1, 1]
-    nu = 3
-    W = np.array([[1, 0], [0, 1]])
-
-    X, S = gmm_gen(N, D, K, alpha, nu, W, seed=None)
-
-    assert (N, D) == X.shape
-    assert (N, K) == S.shape
 
 
 def test_gibbs_init():
     N = 100
     D = 2
     K = 2
-    alpha = [1, 1]
-    nu = 3
-    W = np.array([[1, 0], [0, 1]])
-    X, _ = gmm_gen(N, D, K, alpha, nu, W)
+    X, _ = load_data(N, D, K)
 
     ss = gibbs_init(X, K)
 
@@ -38,10 +22,7 @@ def test_gibbs_sampling():
     N = 100
     D = 2
     K = 2
-    alpha = [1, 1]
-    nu = 3
-    W = np.array([[1, 0], [0, 1]])
-    X, _ = gmm_gen(N, D, K, alpha, nu, W)
+    X, _ = load_data(N, D, K)
 
     n_iter = 10
     ss = gibbs_sampling(X, K, n_iter)

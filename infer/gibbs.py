@@ -5,45 +5,16 @@ from numpy.linalg import pinv
 from scipy import stats
 
 
-def gmm_gen(N, D, K, alpha, nu, W, seed=None):
-    """
-    Args
-        N: Int > 0
-        D: Int > 0
-        K: Int > 0
-        alpha: K-array
-        nu: Int > D - 1
-        W: (D, D) matrix
-    Returns
-        X: (N, D) matrix
-    """
-    pi = stats.dirichlet(alpha, seed).rvs()[0]
-    Lmd = [stats.wishart(df=nu, scale=W).rvs() for _ in range(K)]
-    mu = [stats.uniform(scale=3).rvs(D) for _ in range(K)]
-
-    X = []
-    S = []
-    for n in range(N):
-        s_n = np.random.multinomial(1, pvals=pi)
-        S += [s_n]
-        for k in range(K):
-            if s_n[k] == 1:
-                X += [stats.multivariate_normal(mu[k], Lmd[k]).rvs()]
-                break
-
-    return np.array(X).reshape(N, D), np.array(S).reshape(N, K)
-
-
 def gibbs_init(X, K):
     """
     Args
         X: (N, D) matrix
-            Item matrix
+            Items
         K: Int > 0
-            Num of class (mixture)
+            Num of classes (mixture)
     Returns
-        smpl_dict: Dict
-            Initilized memory to save gibbs sampled items.
+        smpl_hist: Dict
+           History of gibbs sampling which has latents variables and parameters.
             {
                 "pi": [[pi_1, ..., pi_K], ...],
                 "mu": [[mu_1, ..., mu_K], ...],
@@ -63,14 +34,14 @@ def gibbs_init(X, K):
     N, D = X.shape
     eps = 1.0e-2
 
-    smpl_dict = {}
+    smpl_hist = {}
 
     # Initialize pi
-    smpl_dict["pi"] = [[1 / K for _ in range(K)]]
+    smpl_hist["pi"] = [[1 / K for _ in range(K)]]
 
     # Initialize mu
     mu0 = X.mean(axis=0)
-    smpl_dict["mu"] = [
+    smpl_hist["mu"] = [
         [
             mu0.copy() + np.random.multivariate_normal(np.zeros(D), eps * np.eye(D))
             for _ in range(K)
@@ -79,20 +50,16 @@ def gibbs_init(X, K):
 
     # Initialize Lmd
     Lmd0 = np.corrcoef(X.T)
-    smpl_dict["Lmd"] = [[Lmd0 for _ in range(K)]]
+    smpl_hist["Lmd"] = [[Lmd0 for _ in range(K)]]
 
     # Init S: (N, K) matrix
-    S = [np.random.multinomial(1, pvals=smpl_dict["pi"][-1]) for _ in range(len(X))]
-    smpl_dict["S"] = [np.array(S).reshape(len(X), -1)]
+    S = [np.random.multinomial(1, pvals=smpl_hist["pi"][-1]) for _ in range(len(X))]
+    smpl_hist["S"] = [np.array(S).reshape(len(X), -1)]
 
-    return smpl_dict
+    return smpl_hist
 
 
 def draw_s_n(x_n, mu, Lmd, pi, eps=1.0e-5):
-    """
-    n: Int >= 0
-    """
-
     eta_n = []
     for k in range(len(mu)):
         eta_nk = np.exp(
@@ -108,13 +75,6 @@ def draw_s_n(x_n, mu, Lmd, pi, eps=1.0e-5):
 
 
 def draw_Lmd_k_mu_k(X, S_k, m, beta, nu, W_inv):
-    """
-    Args
-        X: (N, D) matrix
-        S: (N, K) matrix
-    Returns
-        Lmd_k: (D, D) matrix
-    """
     X_k = X[S_k == 1]
 
     sum_s_k = S_k.sum()
@@ -134,13 +94,6 @@ def draw_Lmd_k_mu_k(X, S_k, m, beta, nu, W_inv):
 
 
 def draw_pi(S, alpha):
-    """
-    Args
-        S: (N, K) matrix
-        alpha: K array
-    Returns
-        pi_new: K array
-    """
     alpha_hat = np.sum(S.T, axis=1) + alpha
     return stats.dirichlet.rvs(alpha_hat)[0]
 
@@ -152,7 +105,7 @@ def gibbs_sampling(X, K, n_iter=100):
         K: Int > 0
         n_iter: Int > 0
     Returns
-        smpl_dict: Dict
+        smpl_hist: Dict
             {
                 "pi": [[pi_1, ..., pi_K], ...],
                 "mu": [[mu_1, ..., mu_K], ...],
