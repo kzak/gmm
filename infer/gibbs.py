@@ -121,7 +121,7 @@ def gibbs_sampling(X, K, n_iter=100):
     alpha = np.ones(K)
     beta = 1.0
     nu = D
-    W_inv = np.array([[1, 0], [0, 1]])
+    W_inv = np.eye(D)
 
     # Gibbs sampling
     for i in range(n_iter):
